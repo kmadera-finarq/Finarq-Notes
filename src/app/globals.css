@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #F1F2F5;
+  --surface: #FFFFFF;
+  --surface-soft: #F7F8FA;
+  --ink: #171923;
+  --ink-soft: #63677A;
+  --ink-faint: #9B9FAE;
+  --line: #E2E4EA;
+  --accent: #2F5DE3;
+  --accent-soft: #E8EDFC;
+  --flag: #E8A33D;
+  --flag-soft: #FCF2E1;
+  --success: #2F9E5B;
+  --success-soft: #E5F5EB;
+  --danger: #D8473F;
+  --danger-soft: #FBEAE9;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-soft: var(--surface-soft);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-flag: var(--flag);
+  --color-flag-soft: var(--flag-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono-face);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 8px;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
