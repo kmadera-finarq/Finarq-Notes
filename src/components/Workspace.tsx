@@ -9,6 +9,7 @@ import Sidebar from "@/components/Sidebar";
 import Board from "@/components/Board";
 import {
   NewGroupModal,
+  EditGroupModal,
   NewTaskModal,
   TaskDetailModal,
   UsersPanel,
@@ -16,6 +17,7 @@ import {
 
 type ModalState =
   | { type: "newGroup" }
+  | { type: "editGroup"; group: Group }
   | { type: "newTask"; groupId?: string }
   | { type: "taskDetail"; task: Task }
   | { type: "users" }
@@ -41,12 +43,14 @@ export default function Workspace({
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [dueSort, setDueSort] = useState<"asc" | "desc" | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2200);
   }, []);
 
+  // ---------- Sincronización en tiempo real (para cambios de otras personas) ----------
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
@@ -56,8 +60,11 @@ export default function Workspace({
         { event: "*", schema: "public", table: "tasks" },
         (payload) => {
           setTasks((prev) => {
-            if (payload.eventType === "INSERT")
-              return [...prev, payload.new as Task];
+            if (payload.eventType === "INSERT") {
+              const row = payload.new as Task;
+              if (prev.some((t) => t.id === row.id)) return prev;
+              return [...prev, row];
+            }
             if (payload.eventType === "UPDATE")
               return prev.map((t) =>
                 t.id === (payload.new as Task).id ? (payload.new as Task) : t
@@ -73,8 +80,15 @@ export default function Workspace({
         { event: "*", schema: "public", table: "groups" },
         (payload) => {
           setGroups((prev) => {
-            if (payload.eventType === "INSERT")
-              return [...prev, payload.new as Group];
+            if (payload.eventType === "INSERT") {
+              const row = payload.new as Group;
+              if (prev.some((g) => g.id === row.id)) return prev;
+              return [...prev, row];
+            }
+            if (payload.eventType === "UPDATE")
+              return prev.map((g) =>
+                g.id === (payload.new as Group).id ? (payload.new as Group) : g
+              );
             if (payload.eventType === "DELETE")
               return prev.filter((g) => g.id !== (payload.old as Group).id);
             return prev;
@@ -86,8 +100,27 @@ export default function Workspace({
         { event: "*", schema: "public", table: "group_members" },
         (payload) => {
           setMembers((prev) => {
-            if (payload.eventType === "INSERT")
-              return [...prev, payload.new as GroupMember];
+            if (payload.eventType === "INSERT") {
+              const row = payload.new as GroupMember;
+              if (
+                prev.some(
+                  (m) =>
+                    m.group_id === row.group_id && m.profile_id === row.profile_id
+                )
+              )
+                return prev;
+              return [...prev, row];
+            }
+            if (payload.eventType === "DELETE") {
+              const old = payload.old as Partial<GroupMember>;
+              return prev.filter(
+                (m) =>
+                  !(
+                    m.group_id === old.group_id &&
+                    m.profile_id === old.profile_id
+                  )
+              );
+            }
             return prev;
           });
         }
@@ -97,14 +130,19 @@ export default function Workspace({
         { event: "*", schema: "public", table: "profiles" },
         (payload) => {
           setProfiles((prev) => {
-            if (payload.eventType === "INSERT")
-              return [...prev, payload.new as Profile];
+            if (payload.eventType === "INSERT") {
+              const row = payload.new as Profile;
+              if (prev.some((p) => p.id === row.id)) return prev;
+              return [...prev, row];
+            }
             if (payload.eventType === "UPDATE")
               return prev.map((p) =>
                 p.id === (payload.new as Profile).id
                   ? (payload.new as Profile)
                   : p
               );
+            if (payload.eventType === "DELETE")
+              return prev.filter((p) => p.id !== (payload.old as Profile).id);
             return prev;
           });
         }
@@ -116,6 +154,36 @@ export default function Workspace({
     };
   }, []);
 
+  // ---------- Actualizaciones optimistas (reflejan tus propios cambios al instante) ----------
+  function upsertTask(task: Task) {
+    setTasks((prev) => {
+      const exists = prev.some((t) => t.id === task.id);
+      return exists ? prev.map((t) => (t.id === task.id ? task : t)) : [...prev, task];
+    });
+  }
+  function removeTaskLocal(taskId: string) {
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+  }
+  function upsertGroupWithMembers(group: Group, memberIds: string[]) {
+    setGroups((prev) => {
+      const exists = prev.some((g) => g.id === group.id);
+      return exists ? prev.map((g) => (g.id === group.id ? group : g)) : [...prev, group];
+    });
+    setMembers((prev) => {
+      const others = prev.filter((m) => m.group_id !== group.id);
+      return [...others, ...memberIds.map((profile_id) => ({ group_id: group.id, profile_id }))];
+    });
+  }
+  function removeGroupLocal(groupId: string) {
+    setGroups((prev) => prev.filter((g) => g.id !== groupId));
+    setMembers((prev) => prev.filter((m) => m.group_id !== groupId));
+    setTasks((prev) => prev.filter((t) => t.group_id !== groupId));
+  }
+  function removeProfileLocal(profileId: string) {
+    setProfiles((prev) => prev.filter((p) => p.id !== profileId));
+    setMembers((prev) => prev.filter((m) => m.profile_id !== profileId));
+  }
+
   const me = profiles.find((p) => p.id === currentUserId);
   const activeGroup = activeGroupId
     ? groups.find((g) => g.id === activeGroupId) ?? null
@@ -123,13 +191,19 @@ export default function Workspace({
   const activeGroupMemberIds = activeGroup
     ? members.filter((m) => m.group_id === activeGroup.id).map((m) => m.profile_id)
     : [];
-  const visibleTasks = useMemo(
-    () =>
-      activeGroup
-        ? tasks.filter((t) => t.group_id === activeGroup.id)
-        : tasks,
-    [tasks, activeGroup]
-  );
+  const visibleTasks = useMemo(() => {
+    const base = activeGroup
+      ? tasks.filter((t) => t.group_id === activeGroup.id)
+      : tasks;
+    if (!dueSort) return base;
+    const withDate = base.filter((t) => t.due_date);
+    const withoutDate = base.filter((t) => !t.due_date);
+    withDate.sort((a, b) => {
+      const cmp = (a.due_date as string).localeCompare(b.due_date as string);
+      return dueSort === "asc" ? cmp : -cmp;
+    });
+    return [...withDate, ...withoutDate];
+  }, [tasks, activeGroup, dueSort]);
   const groupCounts = useMemo(() => {
     const map = new Map<string, number>();
     tasks.forEach((t) => map.set(t.group_id, (map.get(t.group_id) ?? 0) + 1));
@@ -153,6 +227,7 @@ export default function Workspace({
         activeGroupId={activeGroupId}
         onSelectGroup={setActiveGroupId}
         onNewGroup={() => setModal({ type: "newGroup" })}
+        onEditGroup={(group) => setModal({ type: "editGroup", group })}
         onOpenUsers={() => setModal({ type: "users" })}
       />
       <div className="flex-1 flex flex-col min-w-0">
@@ -168,6 +243,24 @@ export default function Workspace({
             </p>
           </div>
           <div className="flex items-center gap-2.5">
+            <button
+              onClick={() =>
+                setDueSort((prev) =>
+                  prev === null ? "asc" : prev === "asc" ? "desc" : null
+                )
+              }
+              className={`flex items-center gap-1.5 border rounded-lg px-3 py-2 text-[12.5px] font-semibold ${
+                dueSort
+                  ? "border-accent text-accent bg-accent-soft"
+                  : "border-line text-ink-soft hover:bg-surface-soft"
+              }`}
+              title="Ordenar por fecha límite"
+            >
+              Fecha límite
+              {dueSort === "asc" && <span>↑</span>}
+              {dueSort === "desc" && <span>↓</span>}
+              {!dueSort && <span className="opacity-50">↕</span>}
+            </button>
             <div className="flex items-center gap-2 bg-surface-soft border border-line rounded-full pl-1 pr-3 py-1">
               <div
                 className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-semibold font-display"
@@ -218,6 +311,11 @@ export default function Workspace({
             tasks={visibleTasks}
             profiles={profiles}
             onOpenTask={(task) => setModal({ type: "taskDetail", task })}
+            onStatusChange={(taskId, status) => {
+              setTasks((prev) =>
+                prev.map((t) => (t.id === taskId ? { ...t, status } : t))
+              );
+            }}
             showToast={showToast}
           />
         )}
@@ -227,9 +325,27 @@ export default function Workspace({
         <NewGroupModal
           profiles={profiles}
           onClose={() => setModal(null)}
-          onCreated={(id) => {
-            setActiveGroupId(id);
+          onCreated={(group, memberIds) => {
+            upsertGroupWithMembers(group, memberIds);
+            setActiveGroupId(group.id);
             showToast("Grupo creado");
+          }}
+        />
+      )}
+      {modal?.type === "editGroup" && (
+        <EditGroupModal
+          group={modal.group}
+          members={members}
+          profiles={profiles}
+          onClose={() => setModal(null)}
+          onSaved={(group, memberIds) => {
+            upsertGroupWithMembers(group, memberIds);
+            showToast("Grupo actualizado");
+          }}
+          onDeleted={(groupId) => {
+            removeGroupLocal(groupId);
+            if (activeGroupId === groupId) setActiveGroupId(null);
+            showToast("Grupo eliminado");
           }}
         />
       )}
@@ -240,7 +356,10 @@ export default function Workspace({
           profiles={profiles}
           defaultGroupId={modal.groupId}
           onClose={() => setModal(null)}
-          onCreated={() => showToast("Actividad creada")}
+          onCreated={(task) => {
+            upsertTask(task);
+            showToast("Actividad creada");
+          }}
         />
       )}
       {modal?.type === "taskDetail" && (
@@ -250,8 +369,14 @@ export default function Workspace({
           members={members}
           profiles={profiles}
           onClose={() => setModal(null)}
-          onSaved={() => showToast("Cambios guardados")}
-          onDeleted={() => showToast("Actividad eliminada")}
+          onSaved={(task) => {
+            upsertTask(task);
+            showToast("Cambios guardados");
+          }}
+          onDeleted={(taskId) => {
+            removeTaskLocal(taskId);
+            showToast("Actividad eliminada");
+          }}
         />
       )}
       {modal?.type === "users" && (
@@ -259,6 +384,10 @@ export default function Workspace({
           profiles={profiles}
           currentUserId={currentUserId}
           onClose={() => setModal(null)}
+          onDeleted={(profileId, name) => {
+            removeProfileLocal(profileId);
+            showToast(`${name} fue eliminado del equipo`);
+          }}
         />
       )}
 
