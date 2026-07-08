@@ -86,12 +86,14 @@ export default function Board({
   tasks,
   profiles,
   onOpenTask,
+  onStatusChange,
   showToast,
 }: {
   statuses: { id: Status; label: string; dot: string }[];
   tasks: Task[];
   profiles: Profile[];
   onOpenTask: (t: Task) => void;
+  onStatusChange: (taskId: string, status: Status) => void;
   showToast: (msg: string) => void;
 }) {
   const [dragOver, setDragOver] = useState<Status | null>(null);
@@ -101,6 +103,7 @@ export default function Board({
     setDragOver(null);
     const taskId = e.dataTransfer.getData("text/plain");
     if (!taskId) return;
+    onStatusChange(taskId, status);
     try {
       await updateTask(taskId, { status });
     } catch {

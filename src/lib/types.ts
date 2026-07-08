@@ -29,6 +29,10 @@ export type Task = {
   priority: Priority;
   status: Status;
   due_date: string | null;
+  leader_notes: string;
+  leader_notes_done: boolean;
+  team_notes: string;
+  team_notes_done: boolean;
   created_by: string | null;
   created_at: string;
 };

@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import type { Profile, Group, GroupMember, Task, Priority, Status } from "@/lib/types";
 import { PRIORITIES, STATUSES, colorFor, initials } from "@/lib/types";
-import { createGroup, createTask, updateTask, deleteTask } from "@/app/actions";
+import { createGroup, updateGroup, deleteGroup, createTask, updateTask, deleteTask, deleteUserProfile } from "@/app/actions";
 
 function ModalShell({
   children,
@@ -71,7 +71,7 @@ export function NewGroupModal({
 }: {
   profiles: Profile[];
   onClose: () => void;
-  onCreated: (groupId: string) => void;
+  onCreated: (group: Group, memberIds: string[]) => void;
 }) {
   const [name, setName] = useState("");
   const [selected, setSelected] = useState<string[]>(profiles.map((p) => p.id));
@@ -81,8 +81,8 @@ export function NewGroupModal({
     if (!name.trim()) return;
     setSaving(true);
     try {
-      const group = await createGroup(name.trim(), selected);
-      onCreated(group.id);
+      const { group, memberIds } = await createGroup(name.trim(), selected);
+      onCreated(group, memberIds);
       onClose();
     } finally {
       setSaving(false);
@@ -160,6 +160,152 @@ export function NewGroupModal({
   );
 }
 
+export function EditGroupModal({
+  group,
+  members,
+  profiles,
+  onClose,
+  onSaved,
+  onDeleted,
+}: {
+  group: Group;
+  members: GroupMember[];
+  profiles: Profile[];
+  onClose: () => void;
+  onSaved: (group: Group, memberIds: string[]) => void;
+  onDeleted: (groupId: string) => void;
+}) {
+  const [name, setName] = useState(group.name);
+  const [selected, setSelected] = useState<string[]>(
+    members.filter((m) => m.group_id === group.id).map((m) => m.profile_id)
+  );
+  const [saving, setSaving] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  async function handleSave() {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      const { group: updated, memberIds } = await updateGroup(
+        group.id,
+        name.trim(),
+        selected
+      );
+      onSaved(updated, memberIds);
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setSaving(true);
+    try {
+      await deleteGroup(group.id);
+      onDeleted(group.id);
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ModalShell onClose={onClose} wide>
+      <h3 className="font-display text-base font-bold mb-1">Editar grupo</h3>
+      <p className="text-xs text-ink-faint mb-4">
+        Cambia el nombre o los integrantes del grupo.
+      </p>
+      <div className="mb-3.5">
+        <label className={labelClass}>Nombre del grupo</label>
+        <input
+          className={inputClass}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+        />
+      </div>
+      <div className="mb-1">
+        <label className={labelClass}>Integrantes</label>
+        <div className="flex flex-col gap-0.5">
+          {profiles.map((p) => (
+            <label
+              key={p.id}
+              className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-[13px] font-medium hover:bg-surface-soft cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(p.id)}
+                onChange={(e) =>
+                  setSelected((prev) =>
+                    e.target.checked
+                      ? [...prev, p.id]
+                      : prev.filter((id) => id !== p.id)
+                  )
+                }
+              />
+              <div
+                className="w-[22px] h-[22px] rounded-full flex items-center justify-center text-white text-[9.5px] font-semibold font-display"
+                style={{ background: colorFor(p.avatar_color) }}
+              >
+                {initials(p.full_name)}
+              </div>
+              <span>{p.full_name}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {confirmingDelete ? (
+        <div className="border border-danger-soft bg-danger-soft rounded-lg p-3 mt-4">
+          <p className="text-[12.5px] text-[#8C2E29] font-medium mb-2.5">
+            ¿Eliminar este grupo? También se eliminarán todas sus actividades.
+            Esta acción no se puede deshacer.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setConfirmingDelete(false)}
+              className="border border-line bg-surface rounded-lg px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={saving}
+              className="bg-danger text-white rounded-lg px-3 py-1.5 text-[12.5px] font-semibold disabled:opacity-50"
+            >
+              {saving ? "Eliminando…" : "Sí, eliminar grupo"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex justify-between items-center mt-4">
+          <button
+            onClick={() => setConfirmingDelete(true)}
+            className="border border-danger-soft text-danger rounded-lg px-3.5 py-2 text-[13px] font-semibold hover:bg-danger-soft"
+          >
+            Eliminar grupo
+          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="border border-line rounded-lg px-3.5 py-2 text-[13px] font-semibold text-ink-soft hover:bg-surface-soft"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !name.trim()}
+              className="bg-ink text-white rounded-lg px-3.5 py-2 text-[13px] font-semibold disabled:opacity-50"
+            >
+              {saving ? "Guardando…" : "Guardar cambios"}
+            </button>
+          </div>
+        </div>
+      )}
+    </ModalShell>
+  );
+}
+
 export function NewTaskModal({
   groups,
   members,
@@ -173,7 +319,7 @@ export function NewTaskModal({
   profiles: Profile[];
   defaultGroupId?: string;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (task: Task) => void;
 }) {
   const [groupId, setGroupId] = useState(defaultGroupId ?? groups[0]?.id ?? "");
   const [title, setTitle] = useState("");
@@ -192,7 +338,7 @@ export function NewTaskModal({
     if (!title.trim() || !groupId) return;
     setSaving(true);
     try {
-      await createTask({
+      const task = await createTask({
         groupId,
         title: title.trim(),
         description: desc.trim(),
@@ -200,7 +346,7 @@ export function NewTaskModal({
         priority,
         dueDate: due || null,
       });
-      onCreated();
+      onCreated(task);
       onClose();
     } finally {
       setSaving(false);
@@ -313,8 +459,8 @@ export function TaskDetailModal({
   members: GroupMember[];
   profiles: Profile[];
   onClose: () => void;
-  onSaved: () => void;
-  onDeleted: () => void;
+  onSaved: (task: Task) => void;
+  onDeleted: (taskId: string) => void;
 }) {
   const [title, setTitle] = useState(task.title);
   const [desc, setDesc] = useState(task.description);
@@ -322,6 +468,14 @@ export function TaskDetailModal({
   const [priority, setPriority] = useState<Priority>(task.priority);
   const [status, setStatus] = useState<Status>(task.status);
   const [due, setDue] = useState(task.due_date ?? "");
+  const [leaderNotes, setLeaderNotes] = useState(task.leader_notes ?? "");
+  const [leaderNotesDone, setLeaderNotesDone] = useState(
+    task.leader_notes_done ?? false
+  );
+  const [teamNotes, setTeamNotes] = useState(task.team_notes ?? "");
+  const [teamNotesDone, setTeamNotesDone] = useState(
+    task.team_notes_done ?? false
+  );
   const [saving, setSaving] = useState(false);
 
   const groupMembers = members
@@ -333,15 +487,19 @@ export function TaskDetailModal({
     if (!title.trim()) return;
     setSaving(true);
     try {
-      await updateTask(task.id, {
+      const updated = await updateTask(task.id, {
         title: title.trim(),
         description: desc.trim(),
         assignee_id: assigneeId || null,
         priority,
         status,
         due_date: due || null,
+        leader_notes: leaderNotes,
+        leader_notes_done: leaderNotesDone,
+        team_notes: teamNotes,
+        team_notes_done: teamNotesDone,
       });
-      onSaved();
+      onSaved(updated);
       onClose();
     } finally {
       setSaving(false);
@@ -352,7 +510,7 @@ export function TaskDetailModal({
     setSaving(true);
     try {
       await deleteTask(task.id);
-      onDeleted();
+      onDeleted(task.id);
       onClose();
     } finally {
       setSaving(false);
@@ -423,6 +581,53 @@ export function TaskDetailModal({
           labels={Object.fromEntries(STATUSES.map((s) => [s.id, s.label]))}
         />
       </div>
+
+      <div className="border-t border-line mt-4 pt-4 flex flex-col gap-3.5">
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className={labelClass + " mb-0"}>Notas Líder</label>
+            <label className="flex items-center gap-1.5 text-[11.5px] font-medium text-ink-soft cursor-pointer">
+              <input
+                type="checkbox"
+                checked={leaderNotesDone}
+                onChange={(e) => setLeaderNotesDone(e.target.checked)}
+              />
+              Resuelto
+            </label>
+          </div>
+          <textarea
+            className={
+              inputClass +
+              ` min-h-[56px] resize-y ${leaderNotesDone ? "line-through opacity-60" : ""}`
+            }
+            value={leaderNotes}
+            onChange={(e) => setLeaderNotes(e.target.value)}
+            placeholder="Notas o instrucciones del líder del grupo"
+          />
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className={labelClass + " mb-0"}>Notas Equipo</label>
+            <label className="flex items-center gap-1.5 text-[11.5px] font-medium text-ink-soft cursor-pointer">
+              <input
+                type="checkbox"
+                checked={teamNotesDone}
+                onChange={(e) => setTeamNotesDone(e.target.checked)}
+              />
+              Resuelto
+            </label>
+          </div>
+          <textarea
+            className={
+              inputClass +
+              ` min-h-[56px] resize-y ${teamNotesDone ? "line-through opacity-60" : ""}`
+            }
+            value={teamNotes}
+            onChange={(e) => setTeamNotes(e.target.value)}
+            placeholder="Comentarios o avances del equipo"
+          />
+        </div>
+      </div>
       <div className="flex justify-between items-center mt-4">
         <button
           onClick={handleDelete}
@@ -455,11 +660,27 @@ export function UsersPanel({
   profiles,
   currentUserId,
   onClose,
+  onDeleted,
 }: {
   profiles: Profile[];
   currentUserId: string;
   onClose: () => void;
+  onDeleted: (profileId: string, name: string) => void;
 }) {
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleDelete(p: Profile) {
+    setSaving(true);
+    try {
+      await deleteUserProfile(p.id);
+      onDeleted(p.id, p.full_name);
+      setConfirmingId(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <ModalShell onClose={onClose}>
       <h3 className="font-display text-base font-bold mb-1">
@@ -468,23 +689,54 @@ export function UsersPanel({
       <p className="text-xs text-ink-faint mb-4">
         Todas las personas que han iniciado sesión con Google en este espacio.
       </p>
-      <div className="flex flex-col gap-1.5 max-h-[260px] overflow-y-auto">
+      <div className="flex flex-col gap-1.5 max-h-[320px] overflow-y-auto">
         {profiles.map((p) => (
-          <div
-            key={p.id}
-            className="flex items-center gap-2.5 px-2.5 py-2 border border-line rounded-lg"
-          >
-            <div
-              className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-white text-[11px] font-semibold font-display"
-              style={{ background: colorFor(p.avatar_color) }}
-            >
-              {initials(p.full_name)}
+          <div key={p.id} className="border border-line rounded-lg">
+            <div className="flex items-center gap-2.5 px-2.5 py-2">
+              <div
+                className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-white text-[11px] font-semibold font-display"
+                style={{ background: colorFor(p.avatar_color) }}
+              >
+                {initials(p.full_name)}
+              </div>
+              <span className="text-[13.5px] font-medium">{p.full_name}</span>
+              {p.id === currentUserId && (
+                <span className="ml-auto font-mono text-[10.5px] text-accent">
+                  tú
+                </span>
+              )}
+              {p.id !== currentUserId && confirmingId !== p.id && (
+                <button
+                  onClick={() => setConfirmingId(p.id)}
+                  className="ml-auto text-[11.5px] text-danger font-semibold hover:underline"
+                >
+                  Eliminar
+                </button>
+              )}
             </div>
-            <span className="text-[13.5px] font-medium">{p.full_name}</span>
-            {p.id === currentUserId && (
-              <span className="ml-auto font-mono text-[10.5px] text-accent">
-                tú
-              </span>
+            {confirmingId === p.id && (
+              <div className="border-t border-line bg-danger-soft rounded-b-lg p-2.5">
+                <p className="text-[12px] text-[#8C2E29] font-medium mb-2">
+                  ¿Quitar a {p.full_name} del equipo? Perderá su lugar en los
+                  grupos. Si vuelve a iniciar sesión, se creará un perfil
+                  nuevo.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setConfirmingId(null)}
+                    className="border border-line bg-surface rounded-lg px-2.5 py-1 text-[11.5px] font-semibold text-ink-soft"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => handleDelete(p)}
+                    disabled={saving}
+                    className="bg-danger text-white rounded-lg px-2.5 py-1 text-[11.5px] font-semibold disabled:opacity-50"
+                  >
+                    {saving ? "Eliminando…" : "Sí, eliminar"}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         ))}

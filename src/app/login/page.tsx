@@ -18,10 +18,10 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] px-5">
       <div className="w-full max-w-sm bg-white border border-[var(--line)] rounded-2xl p-8 text-center">
         <div className="w-11 h-11 rounded-xl bg-ink text-white flex items-center justify-center font-display font-bold text-lg mx-auto mb-4">
-          E
+          F
         </div>
         <h1 className="font-display text-xl font-bold mb-1">
-          Espacio de equipo
+          Finarq Notes
         </h1>
         <p className="text-sm text-ink-faint mb-7">
           Organiza grupos y actividades con tu equipo. Inicia sesión con tu

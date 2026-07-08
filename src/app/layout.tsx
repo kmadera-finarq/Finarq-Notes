@@ -21,7 +21,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Espacio de equipo",
+  title: "Finarq Notes",
   description: "Organiza grupos y actividades con tu equipo",
 };
 

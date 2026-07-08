@@ -25,7 +25,7 @@ export async function createGroup(name: string, memberIds: string[]) {
   if (memErr) throw memErr;
 
   revalidatePath("/dashboard");
-  return group;
+  return { group, memberIds: allMembers };
 }
 
 export async function addMembersToGroup(groupId: string, memberIds: string[]) {
@@ -33,6 +33,56 @@ export async function addMembersToGroup(groupId: string, memberIds: string[]) {
   const { error } = await supabase.from("group_members").insert(
     memberIds.map((profile_id) => ({ group_id: groupId, profile_id }))
   );
+  if (error) throw error;
+  revalidatePath("/dashboard");
+}
+
+export async function updateGroup(
+  groupId: string,
+  name: string,
+  memberIds: string[]
+) {
+  const supabase = await createClient();
+
+  const { data: group, error: nameErr } = await supabase
+    .from("groups")
+    .update({ name })
+    .eq("id", groupId)
+    .select()
+    .single();
+  if (nameErr) throw nameErr;
+
+  // Reemplaza la lista de integrantes por la nueva selección
+  const { error: delErr } = await supabase
+    .from("group_members")
+    .delete()
+    .eq("group_id", groupId);
+  if (delErr) throw delErr;
+
+  if (memberIds.length > 0) {
+    const { error: insErr } = await supabase.from("group_members").insert(
+      memberIds.map((profile_id) => ({ group_id: groupId, profile_id }))
+    );
+    if (insErr) throw insErr;
+  }
+
+  revalidatePath("/dashboard");
+  return { group, memberIds };
+}
+
+export async function deleteGroup(groupId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("groups").delete().eq("id", groupId);
+  if (error) throw error;
+  revalidatePath("/dashboard");
+}
+
+export async function deleteUserProfile(profileId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .delete()
+    .eq("id", profileId);
   if (error) throw error;
   revalidatePath("/dashboard");
 }
@@ -51,17 +101,22 @@ export async function createTask(input: {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  const { error } = await supabase.from("tasks").insert({
-    group_id: input.groupId,
-    title: input.title,
-    description: input.description,
-    assignee_id: input.assigneeId,
-    priority: input.priority,
-    due_date: input.dueDate,
-    created_by: user.id,
-  });
+  const { data: task, error } = await supabase
+    .from("tasks")
+    .insert({
+      group_id: input.groupId,
+      title: input.title,
+      description: input.description,
+      assignee_id: input.assigneeId,
+      priority: input.priority,
+      due_date: input.dueDate,
+      created_by: user.id,
+    })
+    .select()
+    .single();
   if (error) throw error;
   revalidatePath("/dashboard");
+  return task;
 }
 
 export async function updateTask(
@@ -73,12 +128,22 @@ export async function updateTask(
     priority: Priority;
     status: Status;
     due_date: string | null;
+    leader_notes: string;
+    leader_notes_done: boolean;
+    team_notes: string;
+    team_notes_done: boolean;
   }>
 ) {
   const supabase = await createClient();
-  const { error } = await supabase.from("tasks").update(patch).eq("id", id);
+  const { data: task, error } = await supabase
+    .from("tasks")
+    .update(patch)
+    .eq("id", id)
+    .select()
+    .single();
   if (error) throw error;
   revalidatePath("/dashboard");
+  return task;
 }
 
 export async function deleteTask(id: string) {

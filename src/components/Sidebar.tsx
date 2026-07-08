@@ -10,6 +10,7 @@ export default function Sidebar({
   activeGroupId,
   onSelectGroup,
   onNewGroup,
+  onEditGroup,
   onOpenUsers,
 }: {
   groups: Group[];
@@ -18,16 +19,17 @@ export default function Sidebar({
   activeGroupId: string | null;
   onSelectGroup: (id: string | null) => void;
   onNewGroup: () => void;
+  onEditGroup: (group: Group) => void;
   onOpenUsers: () => void;
 }) {
   return (
     <div className="w-[250px] flex-shrink-0 bg-surface border-r border-line flex flex-col gap-4.5 p-3.5 sticky top-0 h-screen">
       <div className="flex items-center gap-2.5 px-1">
         <div className="w-[26px] h-[26px] rounded-lg bg-ink text-white flex items-center justify-center font-display font-bold text-[13px] flex-shrink-0">
-          E
+          F
         </div>
         <h1 className="font-display text-base font-bold tracking-tight">
-          Espacio de equipo
+          Finarq Notes
         </h1>
       </div>
 
@@ -57,7 +59,7 @@ export default function Sidebar({
             <li
               key={g.id}
               onClick={() => onSelectGroup(g.id)}
-              className={`flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer text-[13.5px] font-medium ${
+              className={`group flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer text-[13.5px] font-medium ${
                 activeGroupId === g.id
                   ? "bg-accent-soft text-accent"
                   : "text-ink-soft hover:bg-surface-soft"
@@ -68,9 +70,19 @@ export default function Sidebar({
                 style={{ background: colorFor(i) }}
               />
               <span className="flex-1 truncate">{g.name}</span>
-              <span className="font-mono text-[11px] opacity-70">
+              <span className="font-mono text-[11px] opacity-70 group-hover:hidden">
                 {groupCounts.get(g.id) ?? 0}
               </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditGroup(g);
+                }}
+                className="hidden group-hover:flex items-center justify-center w-5 h-5 rounded hover:bg-white/60 text-ink-faint hover:text-ink flex-shrink-0"
+                title="Editar grupo"
+              >
+                ✎
+              </button>
             </li>
           ))}
         </ul>
