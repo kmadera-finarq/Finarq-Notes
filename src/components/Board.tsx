@@ -31,18 +31,37 @@ function TaskCard({
   onOpen: () => void;
 }) {
   const overdue = task.status !== "done" && task.due_date && isOverdue(task.due_date);
+
+  const pendingLeaderNote = task.leader_notes.trim() !== "" && !task.leader_notes_done;
+  const pendingTeamNote = task.team_notes.trim() !== "" && !task.team_notes_done;
+  const hasPendingNote = pendingLeaderNote || pendingTeamNote;
+
   return (
     <div
       draggable
       onDragStart={(e) => e.dataTransfer.setData("text/plain", task.id)}
       onClick={onOpen}
-      className="bg-surface border border-line rounded-r-[10px] rounded-l-none p-3 pb-3 flex flex-col gap-1.5 cursor-grab hover:border-ink-faint"
+      className="bg-surface border border-line rounded-r-[10px] rounded-l-none p-3 pb-3 flex flex-col gap-1.5 cursor-grab hover:border-ink-faint relative"
       style={{
         borderLeft: `4px solid ${
           assignee ? colorFor(assignee.avatar_color) : "var(--ink-faint)"
         }`,
       }}
     >
+      {hasPendingNote && (
+        <div
+          className="absolute -top-1.5 -right-1.5 flex items-center gap-0.5 bg-flag text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm"
+          title={
+            pendingLeaderNote && pendingTeamNote
+              ? "Nota pendiente del líder y del equipo"
+              : pendingLeaderNote
+              ? "Nota pendiente del líder"
+              : "Nota pendiente del equipo"
+          }
+        >
+          🚩
+        </div>
+      )}
       <div className="flex items-center justify-between gap-1.5">
         <span className="font-mono text-[10.5px] text-ink-faint">
           {task.ticket}
@@ -59,6 +78,20 @@ function TaskCard({
       {task.description && (
         <div className="text-xs text-ink-soft leading-snug line-clamp-2">
           {task.description}
+        </div>
+      )}
+      {hasPendingNote && (
+        <div className="flex gap-1.5 flex-wrap">
+          {pendingLeaderNote && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-flag-soft text-[#8C5E0A]">
+              🚩 Nota Líder
+            </span>
+          )}
+          {pendingTeamNote && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-flag-soft text-[#8C5E0A]">
+              🚩 Nota Equipo
+            </span>
+          )}
         </div>
       )}
       <div className="flex items-center justify-between mt-0.5">
