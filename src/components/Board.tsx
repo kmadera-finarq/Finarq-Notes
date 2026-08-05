@@ -95,11 +95,23 @@ function TaskCard({
         </div>
       )}
       <div className="flex items-center justify-between mt-0.5">
-        <span
-          className={`font-mono text-[10.5px] ${overdue ? "text-danger" : "text-ink-faint"}`}
-        >
-          {task.due_date ? fmtDate(task.due_date) : ""}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`font-mono text-[10.5px] ${overdue ? "text-danger" : "text-ink-faint"}`}
+          >
+            {task.due_date ? fmtDate(task.due_date) : ""}
+          </span>
+          {task.postponements > 0 && (
+            <span
+              title={`Esta actividad se ha aplazado ${task.postponements} ${
+                task.postponements === 1 ? "vez" : "veces"
+              }`}
+              className="flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-flag-soft text-[#8C5E0A]"
+            >
+              🔁 {task.postponements}
+            </span>
+          )}
+        </div>
         {assignee && (
           <div
             title={assignee.full_name}
