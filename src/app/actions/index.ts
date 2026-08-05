@@ -52,7 +52,6 @@ export async function updateGroup(
     .single();
   if (nameErr) throw nameErr;
 
-  // Reemplaza la lista de integrantes por la nueva selección
   const { error: delErr } = await supabase
     .from("group_members")
     .delete()
@@ -151,6 +150,17 @@ export async function deleteTask(id: string) {
   const { error } = await supabase.from("tasks").delete().eq("id", id);
   if (error) throw error;
   revalidatePath("/dashboard");
+}
+
+export async function getDueDateHistory(taskId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("task_due_date_history")
+    .select("*")
+    .eq("task_id", taskId)
+    .order("changed_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function signOut() {

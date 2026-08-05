@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import type { Profile, Group, GroupMember, Task, Priority, Status } from "@/lib/types";
+import type { Profile, Group, GroupMember, Task, Priority, Status, DueDateChange } from "@/lib/types";
 import { PRIORITIES, STATUSES, colorFor, initials } from "@/lib/types";
-import { createGroup, updateGroup, deleteGroup, createTask, updateTask, deleteTask, deleteUserProfile } from "@/app/actions";
+import { createGroup, updateGroup, deleteGroup, createTask, updateTask, deleteTask, deleteUserProfile, getDueDateHistory } from "@/app/actions";
 
 function ModalShell({
   children,
@@ -63,6 +63,112 @@ function PillRow<T extends string>({
 const inputClass =
   "w-full border border-line rounded-lg px-2.5 py-2 text-[13.5px] bg-surface-soft text-ink focus:outline-none focus:ring-2 focus:ring-accent-soft focus:border-accent";
 const labelClass = "block text-xs font-semibold text-ink-soft mb-1.5";
+
+function fmtDate(d: string) {
+  const dt = new Date(d + "T00:00:00");
+  return dt.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
+}
+function fmtDateTime(d: string) {
+  const dt = new Date(d);
+  return (
+    dt.toLocaleDateString("es-MX", { day: "2-digit", month: "short" }) +
+    " · " +
+    dt.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
+  );
+}
+
+function DueDateField({
+  task,
+  profiles,
+  due,
+  onDueChange,
+}: {
+  task: Task;
+  profiles: Profile[];
+  due: string;
+  onDueChange: (v: string) => void;
+}) {
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<DueDateChange[] | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  async function toggleHistory() {
+    if (!showHistory && history === null) {
+      setLoadingHistory(true);
+      try {
+        const rows = await getDueDateHistory(task.id);
+        setHistory(rows as DueDateChange[]);
+      } finally {
+        setLoadingHistory(false);
+      }
+    }
+    setShowHistory((v) => !v);
+  }
+
+  const changedName = (id: string | null) =>
+    id ? profiles.find((p) => p.id === id)?.full_name ?? "Alguien" : "Alguien";
+
+  return (
+    <div className="flex-1 mb-3.5">
+      <label className={labelClass}>Fecha límite</label>
+      <input
+        type="date"
+        className={inputClass}
+        value={due}
+        onChange={(e) => onDueChange(e.target.value)}
+      />
+      <div className="flex items-center justify-between mt-1.5 gap-2 flex-wrap">
+        {task.original_due_date && (
+          <span className="text-[11px] text-ink-faint">
+            Original: {fmtDate(task.original_due_date)}
+          </span>
+        )}
+        {task.postponements > 0 && (
+          <button
+            type="button"
+            onClick={toggleHistory}
+            className="text-[11px] font-semibold text-[#8C5E0A] bg-flag-soft px-2 py-0.5 rounded-full hover:opacity-80"
+          >
+            🔁 Aplazada {task.postponements}{" "}
+            {task.postponements === 1 ? "vez" : "veces"} · ver historial
+          </button>
+        )}
+      </div>
+      {showHistory && (
+        <div className="mt-2 border border-line rounded-lg p-2.5 bg-surface-soft flex flex-col gap-1.5 max-h-[140px] overflow-y-auto">
+          {loadingHistory && (
+            <p className="text-[11.5px] text-ink-faint">Cargando…</p>
+          )}
+          {!loadingHistory && history?.length === 0 && (
+            <p className="text-[11.5px] text-ink-faint">
+              Sin cambios registrados.
+            </p>
+          )}
+          {!loadingHistory &&
+            history?.map((h) => (
+              <div key={h.id} className="text-[11.5px] text-ink-soft">
+                <span className="font-medium text-ink">
+                  {changedName(h.changed_by)}
+                </span>{" "}
+                cambió de{" "}
+                <span className="font-mono">
+                  {h.previous_due_date ? fmtDate(h.previous_due_date) : "sin fecha"}
+                </span>{" "}
+                a{" "}
+                <span className="font-mono">
+                  {h.new_due_date ? fmtDate(h.new_due_date) : "sin fecha"}
+                </span>
+                <span className="text-ink-faint">
+                  {" "}
+                  · {fmtDateTime(h.changed_at)}
+                </span>
+              </div>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function NewGroupModal({
   profiles,
@@ -562,15 +668,7 @@ export function TaskDetailModal({
           <label className={labelClass}>Prioridad</label>
           <PillRow options={PRIORITIES} value={priority} onChange={setPriority} />
         </div>
-        <div className="flex-1 mb-3.5">
-          <label className={labelClass}>Fecha límite</label>
-          <input
-            type="date"
-            className={inputClass}
-            value={due}
-            onChange={(e) => setDue(e.target.value)}
-          />
-        </div>
+        <DueDateField task={task} profiles={profiles} due={due} onDueChange={setDue} />
       </div>
       <div className="mb-1">
         <label className={labelClass}>Estado</label>
