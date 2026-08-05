@@ -29,12 +29,23 @@ export type Task = {
   priority: Priority;
   status: Status;
   due_date: string | null;
+  original_due_date: string | null;
+  postponements: number;
   leader_notes: string;
   leader_notes_done: boolean;
   team_notes: string;
   team_notes_done: boolean;
   created_by: string | null;
   created_at: string;
+};
+
+export type DueDateChange = {
+  id: string;
+  task_id: string;
+  previous_due_date: string | null;
+  new_due_date: string | null;
+  changed_by: string | null;
+  changed_at: string;
 };
 
 export const STATUSES: { id: Status; label: string; dot: string }[] = [
