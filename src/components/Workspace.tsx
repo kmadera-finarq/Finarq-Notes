@@ -58,6 +58,10 @@ export default function Workspace({
   const [dueSort, setDueSort] = useState<"asc" | "desc" | null>(null);
   const [switching, setSwitching] = useState(false);
 
+  useEffect(() => {
+    setSwitching(false);
+  }, [activeAreaId]);
+
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2200);
