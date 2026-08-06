@@ -172,10 +172,12 @@ function DueDateField({
 
 export function NewGroupModal({
   profiles,
+  areaId,
   onClose,
   onCreated,
 }: {
   profiles: Profile[];
+  areaId: string;
   onClose: () => void;
   onCreated: (group: Group, memberIds: string[]) => void;
 }) {
@@ -187,7 +189,7 @@ export function NewGroupModal({
     if (!name.trim()) return;
     setSaving(true);
     try {
-      const { group, memberIds } = await createGroup(name.trim(), selected);
+      const { group, memberIds } = await createGroup(name.trim(), selected, areaId);
       onCreated(group, memberIds);
       onClose();
     } finally {

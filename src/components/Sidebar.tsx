@@ -1,9 +1,15 @@
 "use client";
 
-import type { Group } from "@/lib/types";
+import type { Area, Group } from "@/lib/types";
 import { colorFor } from "@/lib/types";
 
 export default function Sidebar({
+  areaName,
+  myAreas,
+  activeAreaId,
+  onSwitchArea,
+  isAdmin,
+  onOpenAdmin,
   groups,
   groupCounts,
   totalTasks,
@@ -13,6 +19,12 @@ export default function Sidebar({
   onEditGroup,
   onOpenUsers,
 }: {
+  areaName: string;
+  myAreas: Area[];
+  activeAreaId: string;
+  onSwitchArea: (areaId: string) => void;
+  isAdmin: boolean;
+  onOpenAdmin: () => void;
   groups: Group[];
   groupCounts: Map<string, number>;
   totalTasks: number;
@@ -28,10 +40,35 @@ export default function Sidebar({
         <div className="w-[26px] h-[26px] rounded-lg bg-ink text-white flex items-center justify-center font-display font-bold text-[13px] flex-shrink-0">
           F
         </div>
-        <h1 className="font-display text-base font-bold tracking-tight">
-          Finarq Notes
-        </h1>
+        <div className="min-w-0">
+          <h1 className="font-display text-base font-bold tracking-tight leading-tight truncate">
+            Finarq Notes
+          </h1>
+        </div>
       </div>
+
+      {myAreas.length > 1 ? (
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-ink-faint font-semibold px-1 mb-1.5">
+            Mi área
+          </div>
+          <select
+            value={activeAreaId}
+            onChange={(e) => onSwitchArea(e.target.value)}
+            className="w-full border border-line rounded-lg px-2.5 py-2 text-[13px] font-semibold bg-surface-soft text-ink"
+          >
+            {myAreas.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        areaName && (
+          <p className="text-[11px] text-ink-faint px-1 -mt-2.5">{areaName}</p>
+        )
+      )}
 
       <div>
         <div className="text-[11px] uppercase tracking-wide text-ink-faint font-semibold px-1 mt-1">
@@ -95,12 +132,22 @@ export default function Sidebar({
         <span className="text-[15px]">+</span> Nuevo grupo
       </button>
 
-      <button
-        onClick={onOpenUsers}
-        className="mt-auto flex items-center gap-1.5 border border-dashed border-line text-ink-soft text-[13px] font-medium px-2.5 py-2 rounded-lg hover:border-ink-faint hover:text-ink text-left"
-      >
-        <span className="text-[15px]">＋</span> Usuarios del equipo
-      </button>
+      <div className="mt-auto flex flex-col gap-2">
+        <button
+          onClick={onOpenUsers}
+          className="flex items-center gap-1.5 border border-dashed border-line text-ink-soft text-[13px] font-medium px-2.5 py-2 rounded-lg hover:border-ink-faint hover:text-ink text-left"
+        >
+          <span className="text-[15px]">＋</span> Usuarios del equipo
+        </button>
+        {isAdmin && (
+          <button
+            onClick={onOpenAdmin}
+            className="flex items-center gap-1.5 border border-line bg-surface-soft text-ink text-[13px] font-semibold px-2.5 py-2 rounded-lg hover:bg-accent-soft hover:text-accent text-left"
+          >
+            <span className="text-[15px]">⚙</span> Panel de administrador
+          </button>
+        )}
+      </div>
     </div>
   );
 }

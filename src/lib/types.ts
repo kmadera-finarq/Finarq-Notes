@@ -2,11 +2,24 @@ export type Profile = {
   id: string;
   full_name: string;
   avatar_color: number;
+  last_area_id: string | null;
+};
+
+export type Area = {
+  id: string;
+  name: string;
+  created_at: string;
+};
+
+export type UserArea = {
+  profile_id: string;
+  area_id: string;
 };
 
 export type Group = {
   id: string;
   name: string;
+  area_id: string;
   created_by: string | null;
   created_at: string;
 };

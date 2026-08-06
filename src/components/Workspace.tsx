@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { signOut } from "@/app/actions";
-import type { Profile, Group, GroupMember, Task } from "@/lib/types";
+import { signOut, switchArea } from "@/app/actions";
+import type { Profile, Group, GroupMember, Task, Area } from "@/lib/types";
 import { STATUSES, colorFor, initials } from "@/lib/types";
 import Sidebar from "@/components/Sidebar";
 import Board from "@/components/Board";
+import AdminPanel from "@/components/AdminPanel";
 import {
   NewGroupModal,
   EditGroupModal,
@@ -21,21 +23,31 @@ type ModalState =
   | { type: "newTask"; groupId?: string }
   | { type: "taskDetail"; task: Task }
   | { type: "users" }
+  | { type: "admin" }
   | null;
 
 export default function Workspace({
   currentUserId,
+  isAdmin,
+  areaName,
+  myAreas,
+  activeAreaId,
   initialProfiles,
   initialGroups,
   initialMembers,
   initialTasks,
 }: {
   currentUserId: string;
+  isAdmin: boolean;
+  areaName: string;
+  myAreas: Area[];
+  activeAreaId: string;
   initialProfiles: Profile[];
   initialGroups: Group[];
   initialMembers: GroupMember[];
   initialTasks: Task[];
 }) {
+  const router = useRouter();
   const [profiles, setProfiles] = useState(initialProfiles);
   const [groups, setGroups] = useState(initialGroups);
   const [members, setMembers] = useState(initialMembers);
@@ -44,11 +56,24 @@ export default function Workspace({
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [dueSort, setDueSort] = useState<"asc" | "desc" | null>(null);
+  const [switching, setSwitching] = useState(false);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2200);
   }, []);
+
+  async function handleSwitchArea(areaId: string) {
+    if (areaId === activeAreaId) return;
+    setSwitching(true);
+    try {
+      await switchArea(areaId);
+      router.refresh();
+    } catch {
+      showToast("No se pudo cambiar de área");
+      setSwitching(false);
+    }
+  }
 
   // ---------- Sincronización en tiempo real (para cambios de otras personas) ----------
   useEffect(() => {
@@ -82,6 +107,7 @@ export default function Workspace({
           setGroups((prev) => {
             if (payload.eventType === "INSERT") {
               const row = payload.new as Group;
+              if (row.area_id !== activeAreaId) return prev;
               if (prev.some((g) => g.id === row.id)) return prev;
               return [...prev, row];
             }
@@ -130,11 +156,6 @@ export default function Workspace({
         { event: "*", schema: "public", table: "profiles" },
         (payload) => {
           setProfiles((prev) => {
-            if (payload.eventType === "INSERT") {
-              const row = payload.new as Profile;
-              if (prev.some((p) => p.id === row.id)) return prev;
-              return [...prev, row];
-            }
             if (payload.eventType === "UPDATE")
               return prev.map((p) =>
                 p.id === (payload.new as Profile).id
@@ -152,7 +173,7 @@ export default function Workspace({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [activeAreaId]);
 
   // ---------- Actualizaciones optimistas (reflejan tus propios cambios al instante) ----------
   function upsertTask(task: Task) {
@@ -210,10 +231,10 @@ export default function Workspace({
     return map;
   }, [tasks]);
 
-  if (!me) {
+  if (!me || switching) {
     return (
       <div className="min-h-screen flex items-center justify-center text-sm text-ink-faint">
-        Preparando tu perfil…
+        {switching ? "Cambiando de área…" : "Preparando tu perfil…"}
       </div>
     );
   }
@@ -221,6 +242,12 @@ export default function Workspace({
   return (
     <div className="flex min-h-screen">
       <Sidebar
+        areaName={areaName}
+        myAreas={myAreas}
+        activeAreaId={activeAreaId}
+        onSwitchArea={handleSwitchArea}
+        isAdmin={isAdmin}
+        onOpenAdmin={() => setModal({ type: "admin" })}
         groups={groups}
         groupCounts={groupCounts}
         totalTasks={tasks.length}
@@ -324,6 +351,7 @@ export default function Workspace({
       {modal?.type === "newGroup" && (
         <NewGroupModal
           profiles={profiles}
+          areaId={activeAreaId}
           onClose={() => setModal(null)}
           onCreated={(group, memberIds) => {
             upsertGroupWithMembers(group, memberIds);
@@ -389,6 +417,9 @@ export default function Workspace({
             showToast(`${name} fue eliminado del equipo`);
           }}
         />
+      )}
+      {modal?.type === "admin" && (
+        <AdminPanel onClose={() => setModal(null)} />
       )}
 
       {toast && (
